@@ -782,7 +782,7 @@ export default function App() {
           <p className="text-zinc-600 text-xs font-mono mb-8">&copy; 2026 Black League Project. All rights reserved.</p>
           <div className="flex justify-center gap-6">
             <a href="#" className="text-zinc-600 hover:text-white transition"></a>
-            <a href="#" className="text-zinc-600 hover:text-white transition">Вики</a>
+            <a href="#" className="text-zinc-600 hover:text-white transition"></a>
             <a href="#" className="text-zinc-600 hover:text-white transition"></a>
           </div>
           {/* Secret Admin Area */}
