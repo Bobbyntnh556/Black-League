@@ -3,7 +3,7 @@ import {
   Menu, X, Lock, Unlock, Play, Book, Save, Trash2, PlusCircle, FolderPlus,
   Bold, Italic, Underline, List, Quote, Type, Eye, CheckCircle, ExternalLink, AlertTriangle,
   Image as ImageIcon, UploadCloud, Newspaper, Calendar, ArrowLeft, CloudOff, Cloud, Layout,
-  ChevronRight, Hash, Terminal, Cpu, ShieldAlert
+  ChevronRight, Hash, Terminal, Cpu, ShieldAlert, GripVertical
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -344,6 +344,10 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState('SYNCED');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
+  // DRAG AND DROP STATE
+  const [draggedPageId, setDraggedPageId] = useState(null);
+  const [dragOverCategory, setDragOverCategory] = useState(null);
+
   const editorContentRef = useRef(null);
   const selectionRangeRef = useRef(null);
   const [toast, setToast] = useState({ message: '', visible: false });
@@ -392,7 +396,7 @@ export default function App() {
       const unsubNews = onSnapshot(qNews, 
         (snapshot) => {
           const news = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          news.sort((a, b) => new Date(b.id) - new Date(a.id)); // Sort by ID assuming ID is timestamp roughly, or implement real date sort
+          news.sort((a, b) => new Date(b.id) - new Date(a.id)); 
           setNewsItems(news);
           if (activeNewsId && !news.find(n => n.id === activeNewsId)) setActiveNewsId(null);
         }, 
@@ -578,6 +582,42 @@ export default function App() {
     setShowDeleteConfirm(false);
   };
 
+  // --- DRAG AND DROP HANDLERS ---
+  const handlePageDrop = async (targetCategory) => {
+    if (!draggedPageId || !isAdmin) return;
+    
+    // Find the page being dragged
+    const pageToMove = wikiPages.find(p => p.id === draggedPageId);
+    if (!pageToMove || pageToMove.category === targetCategory) {
+      setDraggedPageId(null);
+      setDragOverCategory(null);
+      return;
+    }
+
+    // Update Category
+    if (dataSource === 'firebase' && authUser) {
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wiki', draggedPageId), { 
+          category: targetCategory 
+        });
+        showToast(`ПЕРЕМЕЩЕНО В ${targetCategory.toUpperCase()}`);
+      } catch (e) {
+        showToast("ОШИБКА ПЕРЕМЕЩЕНИЯ");
+      }
+    } else {
+      const updated = wikiPages.map(p => 
+        p.id === draggedPageId ? { ...p, category: targetCategory } : p
+      );
+      setWikiPages(updated);
+      saveDataLocally('wiki', updated);
+      showToast(`ПЕРЕМЕЩЕНО В ${targetCategory.toUpperCase()}`);
+    }
+
+    // Reset Drag State
+    setDraggedPageId(null);
+    setDragOverCategory(null);
+  };
+
   const formatDoc = (cmd, val = null) => {
     if (!isAdmin) return;
     document.execCommand(cmd, false, val);
@@ -616,8 +656,8 @@ export default function App() {
         <div className="flex items-center justify-between h-20">
           <div className="flex-shrink-0 cursor-pointer group" onClick={() => setView('landing')}>
             <span className="text-2xl font-black tracking-tighter uppercase text-white flex items-center gap-2 group-hover:scale-105 transition-transform duration-300">
-               <span className="text-red-600 bg-red-600/10 p-1 rounded border border-red-600/30 shadow-[0_0_15px_rgba(220,38,38,0.4)]">BL</span>
-               <span className="hidden sm:inline">Black League</span>
+                <span className="text-red-600 bg-red-600/10 p-1 rounded border border-red-600/30 shadow-[0_0_15px_rgba(220,38,38,0.4)]">BL</span>
+                <span className="hidden sm:inline">Black League</span>
             </span>
           </div>
           
@@ -760,7 +800,7 @@ export default function App() {
                   <h3 className="text-2xl font-bold text-white mb-4 leading-tight group-hover:text-red-500 transition-colors">{news.title}</h3>
                   <div className="text-zinc-500 text-sm line-clamp-3 mb-6 flex-1 font-light" dangerouslySetInnerHTML={{ __html: news.content ? news.content.replace(/<img[^>]*>/g, "") : '' }}></div>
                   <div className="text-xs font-bold text-zinc-600 group-hover:text-white uppercase tracking-widest flex items-center gap-2 transition-colors">
-                     Подробнее <div className="w-4 h-[1px] bg-current"></div>
+                      Подробнее <div className="w-4 h-[1px] bg-current"></div>
                   </div>
                 </div>
               </div>
@@ -875,25 +915,55 @@ export default function App() {
                 acc[cat].push(page);
                 return acc;
               }, {})).map(([category, pages]) => (
-              <div key={category} className="mb-6">
+              <div 
+                key={category} 
+                className={`mb-6 transition-all rounded-lg p-2 ${dragOverCategory === category ? 'bg-yellow-900/10 border border-dashed border-yellow-500/50' : 'border border-transparent'}`}
+                onDragOver={(e) => {
+                   if (!isAdmin) return;
+                   e.preventDefault();
+                   setDragOverCategory(category);
+                }}
+                onDragLeave={() => setDragOverCategory(null)}
+                onDrop={(e) => {
+                   e.preventDefault();
+                   handlePageDrop(category);
+                }}
+              >
                 <div className="flex items-center gap-3 px-2 mb-3">
-                  <span className="w-1 h-1 bg-red-600 rounded-full shadow-[0_0_5px_red]"></span>
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{category}</span>
+                  <span className={`w-1 h-1 rounded-full shadow-[0_0_5px] ${dragOverCategory === category ? 'bg-yellow-500 shadow-yellow-500' : 'bg-red-600 shadow-red-600'}`}></span>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest ${dragOverCategory === category ? 'text-yellow-500' : 'text-zinc-500'}`}>{category}</span>
                 </div>
                 <div className="space-y-1 relative">
                   <div className="absolute left-[5px] top-0 bottom-0 w-[1px] bg-zinc-800"></div>
                   {pages.map(page => (
-                    <button 
+                    <div 
                       key={page.id}
-                      onClick={() => setActivePageId(page.id)}
-                      className={`w-full text-left pl-6 pr-4 py-2.5 text-sm transition-all duration-200 relative group rounded-r-lg
-                        ${page.id === activePageId 
-                          ? 'bg-gradient-to-r from-red-900/20 to-transparent text-white border-l-2 border-red-600' 
-                          : 'text-zinc-500 hover:text-zinc-300 border-l-2 border-transparent hover:border-zinc-700'
-                        }`}
+                      draggable={isAdmin}
+                      onDragStart={(e) => {
+                        if (!isAdmin) return;
+                        setDraggedPageId(page.id);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setDraggedPageId(null);
+                        setDragOverCategory(null);
+                      }}
+                      className="group/item relative"
                     >
-                      {page.title || 'Untitled'}
-                    </button>
+                      <button 
+                        onClick={() => setActivePageId(page.id)}
+                        className={`w-full text-left pl-6 pr-4 py-2.5 text-sm transition-all duration-200 relative rounded-r-lg flex items-center justify-between
+                          ${page.id === activePageId 
+                            ? 'bg-gradient-to-r from-red-900/20 to-transparent text-white border-l-2 border-red-600' 
+                            : 'text-zinc-500 hover:text-zinc-300 border-l-2 border-transparent hover:border-zinc-700'
+                          }
+                          ${draggedPageId === page.id ? 'opacity-50' : ''}
+                          `}
+                      >
+                        <span className="truncate">{page.title || 'Untitled'}</span>
+                        {isAdmin && <GripVertical size={12} className="opacity-0 group-hover/item:opacity-50 cursor-grab active:cursor-grabbing" />}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -957,49 +1027,49 @@ export default function App() {
               
               {/* Header Info */}
               <div className="mb-12 border-b border-zinc-800 pb-8">
-                 <div className="flex flex-col gap-4 mb-6">
-                    <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-2 text-xs font-mono text-red-500 uppercase tracking-widest border border-red-900/30 bg-red-950/10 px-3 py-1 rounded-full">
-                          <Hash size={10} />
-                          {isAdmin ? (
-                            <input 
-                              type="text" 
-                              value={editorCategory}
-                              onChange={(e) => setEditorCategory(e.target.value)}
-                              placeholder="CATEGORY"
-                              list={view === 'wiki' ? "category-list" : undefined}
-                              className="bg-transparent border-none text-red-500 focus:ring-0 p-0 w-auto min-w-[50px] placeholder-red-900/50 uppercase"
-                            />
-                          ) : (
-                            <span>{editorCategory || 'GENERAL'}</span>
-                          )}
-                       </div>
-                       {/* Cover Image Input (News Only) */}
-                       {view === 'news' && isAdmin && (
-                          <div className="flex-1 flex items-center gap-2 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 focus-within:border-zinc-600">
-                             <Layout size={12} className="text-zinc-600" />
-                             <input type="text" value={editorImage} onChange={(e) => setEditorImage(e.target.value)} placeholder="URL обложки..." className="bg-transparent text-xs text-zinc-400 w-full focus:outline-none" />
-                             <button onClick={() => openImageModal('cover')} className="text-blue-500 hover:text-white"><UploadCloud size={12} /></button>
-                          </div>
-                       )}
-                    </div>
-                    
-                    <input 
-                      type="text" 
-                      value={editorTitle}
-                      onChange={(e) => setEditorTitle(e.target.value)}
-                      readOnly={!isAdmin}
-                      placeholder="ЗАГОЛОВОК"
-                      className={`w-full bg-transparent border-none text-4xl md:text-6xl font-black text-white focus:ring-0 focus:outline-none placeholder-zinc-800 leading-none uppercase tracking-tight ${!isAdmin && 'pointer-events-none'}`}
-                    />
-                 </div>
-                 
-                 {view === 'news' && editorImage && (
-                    <div className="w-full h-64 md:h-80 rounded-lg overflow-hidden relative mb-8 border border-zinc-800">
-                       <img src={editorImage} alt="Cover" className="w-full h-full object-cover" />
-                       <div className="absolute inset-0 bg-gradient-to-t from-[#080808] to-transparent"></div>
-                    </div>
-                 )}
+                  <div className="flex flex-col gap-4 mb-6">
+                     <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 text-xs font-mono text-red-500 uppercase tracking-widest border border-red-900/30 bg-red-950/10 px-3 py-1 rounded-full">
+                           <Hash size={10} />
+                           {isAdmin ? (
+                             <input 
+                               type="text" 
+                               value={editorCategory}
+                               onChange={(e) => setEditorCategory(e.target.value)}
+                               placeholder="CATEGORY"
+                               list={view === 'wiki' ? "category-list" : undefined}
+                               className="bg-transparent border-none text-red-500 focus:ring-0 p-0 w-auto min-w-[50px] placeholder-red-900/50 uppercase"
+                             />
+                           ) : (
+                             <span>{editorCategory || 'GENERAL'}</span>
+                           )}
+                        </div>
+                        {/* Cover Image Input (News Only) */}
+                        {view === 'news' && isAdmin && (
+                           <div className="flex-1 flex items-center gap-2 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 focus-within:border-zinc-600">
+                              <Layout size={12} className="text-zinc-600" />
+                              <input type="text" value={editorImage} onChange={(e) => setEditorImage(e.target.value)} placeholder="URL обложки..." className="bg-transparent text-xs text-zinc-400 w-full focus:outline-none" />
+                              <button onClick={() => openImageModal('cover')} className="text-blue-500 hover:text-white"><UploadCloud size={12} /></button>
+                           </div>
+                        )}
+                     </div>
+                     
+                     <input 
+                       type="text" 
+                       value={editorTitle}
+                       onChange={(e) => setEditorTitle(e.target.value)}
+                       readOnly={!isAdmin}
+                       placeholder="ЗАГОЛОВОК"
+                       className={`w-full bg-transparent border-none text-4xl md:text-6xl font-black text-white focus:ring-0 focus:outline-none placeholder-zinc-800 leading-none uppercase tracking-tight ${!isAdmin && 'pointer-events-none'}`}
+                     />
+                  </div>
+                  
+                  {view === 'news' && editorImage && (
+                     <div className="w-full h-64 md:h-80 rounded-lg overflow-hidden relative mb-8 border border-zinc-800">
+                        <img src={editorImage} alt="Cover" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#080808] to-transparent"></div>
+                     </div>
+                  )}
               </div>
 
               <div 
