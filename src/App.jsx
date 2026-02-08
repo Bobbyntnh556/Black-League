@@ -24,7 +24,7 @@ import {
   query 
 } from 'firebase/firestore';
 
-// --- ИНИЦИАЛИЗАЦИЯ FIREBASE (БЕЗОПАСНАЯ) ---
+// --- ИНИЦИАЛИЗАЦИЯ FIREBASE (БЕЗОПАСНАЯ & VERCEL-READY) ---
 
 const localConfig = {
   apiKey: "AIzaSyAW4YLD3JDmuPkUACrIW5HaU93l_U_cmno",
@@ -37,29 +37,42 @@ const localConfig = {
 };
 
 let app, auth, db;
-let USE_FIREBASE = false;
-let FIREBASE_ERROR = null;
+let IS_FIREBASE_INITIALIZED = false;
+
+const getFirebaseConfig = () => {
+  if (typeof __firebase_config !== 'undefined') return JSON.parse(__firebase_config);
+  try { if (import.meta.env && import.meta.env.VITE_FIREBASE_CONFIG) return JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG); } catch (e) {}
+  try { if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_FIREBASE_CONFIG) return JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG); } catch (e) {}
+  return localConfig;
+};
+
+// FIX: Санитизация appId для предотвращения ошибок путей Firestore
+const getAppId = () => {
+  let id = 'default-app-id';
+  if (typeof __app_id !== 'undefined') id = __app_id;
+  else {
+    try { if (import.meta.env && import.meta.env.VITE_APP_ID) id = import.meta.env.VITE_APP_ID; } catch(e) {}
+  }
+  // Заменяем недопустимые символы
+  return id.replace(/[./]/g, '_');
+};
 
 try {
-  const isEnvConfig = typeof __firebase_config !== 'undefined';
-  const isLocalConfigValid = localConfig.apiKey && !localConfig.apiKey.includes("ВСТАВЬТЕ_СВОЙ");
+  const config = getFirebaseConfig();
+  const isLocalConfigValid = config.apiKey && !config.apiKey.includes("INSERT_YOUR_OWN");
 
-  if (isEnvConfig || isLocalConfigValid) {
-    const config = isEnvConfig ? JSON.parse(__firebase_config) : localConfig;
+  if (config && isLocalConfigValid) {
     app = initializeApp(config);
     auth = getAuth(app);
     db = getFirestore(app);
-    USE_FIREBASE = true;
-  } else {
-    console.warn("Firebase config is missing or placeholder. Falling back to LocalStorage.");
+    IS_FIREBASE_INITIALIZED = true;
   }
 } catch (e) {
   console.error("Firebase init failed:", e);
-  FIREBASE_ERROR = e.message;
-  USE_FIREBASE = false;
+  IS_FIREBASE_INITIALIZED = false;
 }
 
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const appId = getAppId();
 
 // --- КОНСТАНТЫ ---
 const CREDENTIALS = {
@@ -117,10 +130,9 @@ const ParticlesBackground = () => {
       update() {
         this.x += this.speedX;
         this.y += this.speedY;
-        this.speedX *= 0.99; // Slight friction
+        this.speedX *= 0.99;
         this.speedY *= 0.99;
         
-        // Random slight impulse
         if(Math.random() > 0.95) {
              this.speedX += (Math.random() * 0.2) - 0.1;
              this.speedY += (Math.random() * 0.2) - 0.1;
@@ -358,13 +370,16 @@ export default function App() {
   const selectionRangeRef = useRef(null);
   const [toast, setToast] = useState({ message: '', visible: false });
   const [authUser, setAuthUser] = useState(null);
+  
+  // NEW: Состояние для отслеживания режима данных (Firebase vs Local)
+  const [dataSource, setDataSource] = useState(IS_FIREBASE_INITIALIZED ? 'firebase' : 'local');
 
   // --- 1. АВТОРИЗАЦИЯ И ЗАГРУЗКА ---
   useEffect(() => {
     const token = localStorage.getItem('bl_admin_token');
     if (token === 'true') setIsAdmin(true);
 
-    if (USE_FIREBASE) {
+    if (dataSource === 'firebase') {
       const initAuth = async () => {
         try {
           if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -374,53 +389,70 @@ export default function App() {
           }
         } catch (e) {
           console.error("Auth error:", e);
+          // If auth fails, fallback to local
+          setDataSource('local');
         }
       };
       initAuth();
       const unsubscribe = onAuthStateChanged(auth, (user) => setAuthUser(user));
       return () => unsubscribe();
-    } else {
-      const storedWiki = localStorage.getItem('bl_wiki_data');
-      const storedNews = localStorage.getItem('bl_news_data');
-      
-      setWikiPages(storedWiki ? JSON.parse(storedWiki) : DEFAULT_WIKI_DATA);
-      setNewsItems(storedNews ? JSON.parse(storedNews) : DEFAULT_NEWS_DATA);
-      
-      const initialWiki = storedWiki ? JSON.parse(storedWiki) : DEFAULT_WIKI_DATA;
-      if (initialWiki.length > 0) setActivePageId(initialWiki[0].id);
     }
-  }, []);
+  }, [dataSource]);
 
-  // --- 2. СИНХРОНИЗАЦИЯ ДАННЫХ (FIREBASE ONLY) ---
+  // --- 2. СИНХРОНИЗАЦИЯ ДАННЫХ ---
   useEffect(() => {
-    if (!USE_FIREBASE || !authUser) return;
-
-    try {
+    // 2a. Firebase Sync
+    if (dataSource === 'firebase' && authUser) {
+      // Wiki Sync
       const qWiki = query(collection(db, 'artifacts', appId, 'public', 'data', 'wiki'));
-      const unsubWiki = onSnapshot(qWiki, (snapshot) => {
-        const pages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        pages.sort((a, b) => a.category?.localeCompare(b.category) || a.title?.localeCompare(b.title));
-        setWikiPages(pages);
-        if (activePageId && !pages.find(p => p.id === activePageId)) setActivePageId(null);
-      }, (err) => console.error("Wiki sync error", err));
+      const unsubWiki = onSnapshot(qWiki, 
+        (snapshot) => {
+          const pages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          pages.sort((a, b) => a.category?.localeCompare(b.category) || a.title?.localeCompare(b.title));
+          setWikiPages(pages);
+          if (activePageId && !pages.find(p => p.id === activePageId)) setActivePageId(null);
+        }, 
+        (err) => {
+          console.warn("Wiki sync error (switching to local):", err.message);
+          setDataSource('local'); // Fallback on permission error
+        }
+      );
 
+      // News Sync
       const qNews = query(collection(db, 'artifacts', appId, 'public', 'data', 'news'));
-      const unsubNews = onSnapshot(qNews, (snapshot) => {
-        const news = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Sort by date (simple string comparison works for ISO, but for DD.MM.YYYY it might be weird, 
-        // relying on creation order for now or manual sorting if needed)
-        setNewsItems(news);
-        if (activeNewsId && !news.find(n => n.id === activeNewsId)) setActiveNewsId(null);
-      }, (err) => console.error("News sync error", err));
+      const unsubNews = onSnapshot(qNews, 
+        (snapshot) => {
+          const news = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setNewsItems(news);
+          if (activeNewsId && !news.find(n => n.id === activeNewsId)) setActiveNewsId(null);
+        }, 
+        (err) => {
+           console.warn("News sync error (switching to local):", err.message);
+           setDataSource('local'); // Fallback on permission error
+        }
+      );
 
       return () => {
         unsubWiki();
         unsubNews();
       };
-    } catch (e) {
-      console.error("Sync setup failed", e);
+    } 
+    
+    // 2b. Local Storage Sync (Fallback or Default)
+    if (dataSource === 'local') {
+      const storedWiki = localStorage.getItem('bl_wiki_data');
+      const storedNews = localStorage.getItem('bl_news_data');
+      
+      const loadedWiki = storedWiki ? JSON.parse(storedWiki) : DEFAULT_WIKI_DATA;
+      setWikiPages(loadedWiki);
+      setNewsItems(storedNews ? JSON.parse(storedNews) : DEFAULT_NEWS_DATA);
+      
+      // Select first wiki page if none selected and pages exist
+      if (loadedWiki.length > 0 && !activePageId) setActivePageId(loadedWiki[0].id);
+      
+      showToast("Режим: Локальное хранилище");
     }
-  }, [authUser, activePageId, activeNewsId]);
+  }, [authUser, dataSource]); // Removed activePageId dependency loop
 
   // --- 3. РЕДАКТОР: СИНХРОНИЗАЦИЯ ПОЛЕЙ ---
   useEffect(() => {
@@ -485,19 +517,26 @@ export default function App() {
   const createPage = async () => {
     if (!isAdmin) return;
     const newPageData = { title: 'Новая Страница', category: 'Черновики', content: '<p>Начните писать здесь...</p>' };
-    if (USE_FIREBASE && authUser) {
+    
+    if (dataSource === 'firebase' && authUser) {
       try {
         const docRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'wiki'), newPageData);
         setActivePageId(docRef.id);
-      } catch(e) { console.error(e); showToast("Ошибка создания"); }
+        showToast("Страница создана (Cloud)");
+      } catch(e) { 
+        console.error(e); 
+        showToast("Ошибка Cloud. Переход на Local.");
+        setDataSource('local'); // Fallback
+        // Retry locally immediately? For now just switch mode.
+      }
     } else {
       const newPage = { id: Date.now().toString(), ...newPageData };
       const updated = [...wikiPages, newPage];
       setWikiPages(updated);
       setActivePageId(newPage.id);
       saveDataLocally('wiki', updated);
+      showToast("Страница создана (Local)");
     }
-    showToast("Страница создана");
   };
 
   const createNews = async () => {
@@ -508,37 +547,48 @@ export default function App() {
       image: '', 
       content: '<p>Текст новости...</p>' 
     };
-    if (USE_FIREBASE && authUser) {
+    
+    if (dataSource === 'firebase' && authUser) {
       try {
         const docRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'news'), newNewsData);
         setActiveNewsId(docRef.id);
-      } catch(e) { console.error(e); showToast("Ошибка создания"); }
+        showToast("Новость создана (Cloud)");
+      } catch(e) { 
+        console.error(e); 
+        showToast("Ошибка Cloud. Переход на Local.");
+        setDataSource('local');
+      }
     } else {
       const newNews = { id: Date.now().toString(), ...newNewsData };
       const updated = [newNews, ...newsItems];
       setNewsItems(updated);
       setActiveNewsId(newNews.id);
       saveDataLocally('news', updated);
+      showToast("Новость создана (Local)");
     }
-    showToast("Новость создана");
   };
 
   const handleCreateCategory = async (catName) => {
     if (!isAdmin) return;
     const newPageData = { title: 'Введение', category: catName.trim(), content: `<p>Добро пожаловать в раздел <strong>${catName}</strong>.</p>` };
-    if (USE_FIREBASE && authUser) {
+    
+    if (dataSource === 'firebase' && authUser) {
       try {
         const docRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'wiki'), newPageData);
         setActivePageId(docRef.id);
-      } catch(e) { console.error(e); showToast("Ошибка создания"); }
+        showToast(`Категория создана (Cloud)`);
+      } catch(e) { 
+        console.error(e); 
+        setDataSource('local');
+      }
     } else {
       const newPage = { id: Date.now().toString(), ...newPageData };
       const updated = [...wikiPages, newPage];
       setWikiPages(updated);
       setActivePageId(newPage.id);
       saveDataLocally('wiki', updated);
+      showToast(`Категория создана (Local)`);
     }
-    showToast(`Категория "${catName}" создана`);
   };
 
   const handleSave = async (silent = false) => {
@@ -546,17 +596,19 @@ export default function App() {
     const content = editorContentRef.current.innerHTML;
     setSaveStatus("Сохранение...");
 
-    if (USE_FIREBASE && authUser) {
+    if (dataSource === 'firebase' && authUser) {
       try {
         if (view === 'wiki' && activePageId) {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wiki', activePageId), { title: editorTitle, category: editorCategory, content });
         } else if (view === 'news' && activeNewsId) {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'news', activeNewsId), { title: editorTitle, date: editorCategory, image: editorImage, content });
         }
+        setSaveStatus("Сохранено (Cloud) " + new Date().toLocaleTimeString());
+        if (!silent) showToast("Сохранено!");
       } catch (e) {
         console.error(e);
         setSaveStatus("Ошибка");
-        return;
+        showToast("Ошибка сохранения. Проверьте права.");
       }
     } else {
       if (view === 'wiki' && activePageId) {
@@ -568,9 +620,9 @@ export default function App() {
         setNewsItems(updated);
         saveDataLocally('news', updated);
       }
+      setSaveStatus("Сохранено (Local) " + new Date().toLocaleTimeString());
+      if (!silent) showToast("Сохранено!");
     }
-    setSaveStatus("Сохранено " + new Date().toLocaleTimeString());
-    if (!silent) showToast("Сохранено!");
   };
 
   const handleDelete = async () => {
@@ -581,7 +633,7 @@ export default function App() {
       return;
     }
 
-    if (USE_FIREBASE && authUser) {
+    if (dataSource === 'firebase' && authUser) {
       try {
         if (view === 'wiki' && activePageId) {
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wiki', activePageId));
@@ -590,7 +642,11 @@ export default function App() {
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'news', activeNewsId));
           setActiveNewsId(null);
         }
-      } catch (e) { console.error(e); showToast("Ошибка удаления"); }
+        showToast("Удалено (Cloud)");
+      } catch (e) { 
+        console.error(e); 
+        showToast("Ошибка удаления"); 
+      }
     } else {
       if (view === 'wiki' && activePageId) {
         const updated = wikiPages.filter(p => p.id !== activePageId);
@@ -603,9 +659,9 @@ export default function App() {
         setActiveNewsId(null);
         saveDataLocally('news', updated);
       }
+      showToast("Удалено (Local)");
     }
     setShowDeleteConfirm(false);
-    showToast("Удалено");
   };
 
   const formatDoc = (cmd, val = null) => {
@@ -660,12 +716,24 @@ export default function App() {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
-            <button onClick={isAdmin ? handleLogout : () => setIsLoginModalOpen(true)} className="text-gray-500 hover:text-white transition" title={isAdmin ? "Выйти" : "Вход для админа"}>
-              {isAdmin ? <Unlock className="text-green-500" size={20} /> : <Lock size={20} />}
-            </button>
+            {isAdmin && (
+              <button onClick={handleLogout} className="text-gray-500 hover:text-white transition" title="Выйти">
+                <Unlock className="text-green-500" size={20} />
+              </button>
+            )}
             <a href="https://discord.gg/zbTMvD6ud2" target="_blank" className="bg-red-700 hover:bg-red-800 text-white px-4 py-1.5 rounded font-bold transition transform hover:scale-105 flex items-center gap-2 text-sm">
               <ExternalLink size={16} /> Discord
             </a>
+            {dataSource === 'local' && (
+              <div title="Работает локально" className="text-yellow-600 cursor-help">
+                <CloudOff size={20} />
+              </div>
+            )}
+            {dataSource === 'firebase' && (
+              <div title="Подключено к облаку" className="text-green-600 cursor-help">
+                <Cloud size={20} />
+              </div>
+            )}
           </div>
 
           <div className="-mr-2 flex md:hidden">
@@ -682,9 +750,11 @@ export default function App() {
             <button onClick={() => { setView('landing'); setIsMobileMenuOpen(false); }} className="text-gray-300 block w-full px-3 py-2 rounded-md text-base font-medium">О сервере</button>
             <button onClick={() => { setView('news'); setActiveNewsId(null); setIsMobileMenuOpen(false); }} className="text-gray-300 block w-full px-3 py-2 rounded-md text-base font-medium">Новости</button>
             <button onClick={() => { setView('wiki'); setIsMobileMenuOpen(false); }} className="text-gray-300 block w-full px-3 py-2 rounded-md text-base font-medium">База Знаний</button>
-            <button onClick={() => { if(isAdmin) handleLogout(); else setIsLoginModalOpen(true); setIsMobileMenuOpen(false); }} className="text-gray-500 block w-full px-3 py-2 rounded-md text-base font-medium">
-               {isAdmin ? "Выйти (Админ)" : "Админ-панель"}
-            </button>
+            {isAdmin && (
+              <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="text-gray-500 block w-full px-3 py-2 rounded-md text-base font-medium">
+                 Выйти (Админ)
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -703,10 +773,10 @@ export default function App() {
 
         <div className="relative z-10 max-w-4xl mx-auto">
           <div className="mb-4 inline-block px-4 py-1 rounded-full border border-red-500/30 bg-red-900/20 text-red-400 text-sm font-mono animate-pulse">
-            СЕЗОН 1: ВЕЛИКОЕ ИСПЫТАНИЕ
+            СЕЗОН 1: ВЕЛИКОЕ ОТРЕЗВЛЕНИЕ
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold text-white mb-6 uppercase tracking-tighter leading-tight drop-shadow-[0_0_20px_rgba(220,38,38,0.5)]">
-            Тотальная <br /><span className="text-red-600">Битва</span>
+            Тотальный <br /><span className="text-red-600">Ужас</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-300 mb-10 max-w-2xl mx-auto font-light">
             Хардкорный сервер выживания. Исследуй опасный мир, сражайся с монстрами и выживай в мрачной атмосфере постапокалипсиса.
@@ -763,6 +833,11 @@ export default function App() {
       <footer className="bg-black border-t border-gray-900 pt-16 pb-8">
         <div className="max-w-7xl mx-auto px-4 text-center text-gray-600 text-sm">
           <p>&copy; 2026 Black League. Not affiliated with Mojang AB.</p>
+          {/* Hidden Admin Trigger */}
+          <div 
+            className="w-full h-8 mt-2 cursor-default" 
+            onClick={() => !isAdmin && setIsLoginModalOpen(true)}
+          ></div>
         </div>
       </footer>
     </div>
