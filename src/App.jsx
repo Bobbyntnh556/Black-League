@@ -725,12 +725,14 @@ export default function App() {
             <a href="https://discord.gg/zbTMvD6ud2" target="_blank" className="bg-red-700 hover:bg-red-800 text-white px-4 py-1.5 rounded font-bold transition transform hover:scale-105 flex items-center gap-2 text-sm">
               <ExternalLink size={16} /> Discord
             </a>
-            {dataSource === 'local' && (
+            
+            {/* Иконки облака теперь видны ТОЛЬКО администратору */}
+            {isAdmin && dataSource === 'local' && (
               <div title="Работает локально" className="text-yellow-600 cursor-help">
                 <CloudOff size={20} />
               </div>
             )}
-            {dataSource === 'firebase' && (
+            {isAdmin && dataSource === 'firebase' && (
               <div title="Подключено к облаку" className="text-green-600 cursor-help">
                 <Cloud size={20} />
               </div>
