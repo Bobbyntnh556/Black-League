@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, X, Lock, Unlock, Play, Book, Save, Trash2, PlusCircle, FolderPlus,
   Bold, Italic, Underline, List, Quote, Type, Eye, CheckCircle, ExternalLink, AlertTriangle,
-  Image as ImageIcon, UploadCloud, Newspaper, Calendar, ArrowLeft, CloudOff, Cloud, Layout
+  Image as ImageIcon, UploadCloud, Newspaper, Calendar, ArrowLeft, CloudOff, Cloud, Layout,
+  ChevronRight, Hash
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -897,25 +898,32 @@ export default function App() {
   );
 
   const renderEditor = () => (
-    <div className="pt-16 h-screen flex flex-col md:flex-row overflow-hidden bg-[#0a0a0a]">
+    <div className="pt-16 h-screen flex flex-col md:flex-row overflow-hidden bg-[#050505] relative">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 pointer-events-none opacity-5 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
+
       {/* Sidebar только для Wiki */}
       {view === 'wiki' && (
-        <aside className="w-full md:w-64 bg-[#0f172a] border-r border-gray-800 flex flex-col h-[30vh] md:h-full shrink-0">
-          <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-            <h2 className="font-bold text-white uppercase tracking-wide">Статьи</h2>
+        <aside className="w-full md:w-72 bg-[#0a0a0a]/95 backdrop-blur-md border-r border-red-900/20 flex flex-col h-[35vh] md:h-full shrink-0 z-10 shadow-2xl relative">
+          <div className="p-6 border-b border-red-900/20 flex justify-between items-center bg-gradient-to-r from-red-900/5 to-transparent">
+            <h2 className="text-lg font-bold text-red-500 uppercase tracking-widest flex items-center gap-2">
+              <Book size={18} /> База Знаний
+            </h2>
             {isAdmin && (
-              <div className="flex gap-2">
-                <button onClick={() => setIsCategoryModalOpen(true)} className="text-yellow-500 hover:text-yellow-400 transition-colors" title="Создать категорию">
-                  <FolderPlus size={20} />
+              <div className="flex gap-1">
+                <button onClick={() => setIsCategoryModalOpen(true)} className="p-2 text-zinc-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all" title="Создать категорию">
+                  <FolderPlus size={18} />
                 </button>
-                <button onClick={createPage} className="text-green-500 hover:text-green-400 transition-colors" title="Создать страницу">
-                  <PlusCircle size={20} />
+                <button onClick={createPage} className="p-2 text-zinc-400 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all" title="Создать страницу">
+                  <PlusCircle size={18} />
                 </button>
               </div>
             )}
           </div>
-          <div className="p-2 overflow-y-auto flex-1 space-y-1">
-            {Object.keys(wikiPages).length === 0 && <div className="p-4 text-sm text-gray-500 text-center">Загрузка или пусто...</div>}
+          
+          <div className="p-4 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
+            {Object.keys(wikiPages).length === 0 && <div className="text-sm text-zinc-600 text-center italic py-4">Загрузка данных...</div>}
+            
             {Object.entries(
               wikiPages.reduce((acc, page) => {
                 const cat = page.category || 'Без категории';
@@ -924,69 +932,86 @@ export default function App() {
                 return acc;
               }, {})
             ).map(([category, pages]) => (
-              <div key={category}>
-                <div className="px-3 py-2 text-xs font-bold text-gray-500 uppercase mt-2">{category}</div>
-                {pages.map(page => (
-                  <button 
-                    key={page.id}
-                    onClick={() => setActivePageId(page.id)}
-                    className={`w-full text-left px-3 py-2 rounded text-sm mb-1 transition flex items-center ${page.id === activePageId ? 'bg-red-900/30 text-red-400 border-l-2 border-red-500' : 'text-gray-300 hover:bg-gray-800'}`}
-                  >
-                    {page.title || 'Без названия'}
-                  </button>
-                ))}
+              <div key={category} className="group">
+                <div className="flex items-center gap-2 px-2 mb-2 text-xs font-bold text-zinc-500 uppercase tracking-widest group-hover:text-red-500/70 transition-colors">
+                  <span className="w-1.5 h-1.5 bg-red-600 rounded-full shadow-[0_0_10px_red]"></span> {category}
+                </div>
+                <div className="space-y-0.5 ml-1 border-l border-zinc-800">
+                  {pages.map(page => (
+                    <button 
+                      key={page.id}
+                      onClick={() => setActivePageId(page.id)}
+                      className={`w-full text-left px-4 py-2 text-sm transition-all duration-200 border-l-2 flex items-center gap-2 relative overflow-hidden group/item
+                        ${page.id === activePageId 
+                          ? 'border-red-600 bg-red-600/10 text-white font-medium shadow-[inset_10px_0_20px_-10px_rgba(220,38,38,0.2)]' 
+                          : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 hover:border-zinc-700'
+                        }`}
+                    >
+                      {page.title || 'Без названия'}
+                      {page.id === activePageId && <ChevronRight size={14} className="ml-auto text-red-500 animate-pulse" />}
+                    </button>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
         </aside>
       )}
 
-      <main className="flex-1 flex flex-col bg-[#050505] overflow-hidden relative">
+      <main className="flex-1 flex flex-col bg-[#050505] overflow-hidden relative z-0">
         
         {isAdmin ? (
-          <div className="h-14 border-b border-gray-800 bg-[#0f172a] flex items-center justify-between px-4 shrink-0">
+          <div className="h-14 border-b border-zinc-800 bg-[#0a0a0a]/80 backdrop-blur flex items-center justify-between px-6 shrink-0 shadow-md z-20">
               <div className="flex items-center space-x-2">
                {view === 'news' && (
-                 <button onClick={() => setActiveNewsId(null)} className="mr-2 text-gray-400 hover:text-white" title="Назад к списку">
+                 <button onClick={() => setActiveNewsId(null)} className="mr-2 text-zinc-400 hover:text-white" title="Назад к списку">
                    <ArrowLeft size={20} />
                  </button>
                )}
-               <button onClick={() => formatDoc('bold')} className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white" title="Жирный"><Bold size={18} /></button>
-               <button onClick={() => formatDoc('italic')} className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white" title="Курсив"><Italic size={18} /></button>
-               <button onClick={() => formatDoc('underline')} className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white" title="Подчеркнутый"><Underline size={18} /></button>
-               <div className="w-px h-6 bg-gray-700 mx-2"></div>
-               <button onClick={() => formatDoc('formatBlock', 'H2')} className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white font-bold" title="Заголовок"><Type size={18} /></button>
-               <button onClick={() => formatDoc('insertUnorderedList')} className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white" title="Список"><List size={18} /></button>
-               <button onClick={() => formatDoc('formatBlock', 'blockquote')} className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white" title="Цитата"><Quote size={18} /></button>
-               <button onClick={() => openImageModal('content')} className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white" title="Вставить изображение в текст"><ImageIcon size={18} /></button>
+               <div className="flex bg-zinc-900/50 rounded-lg p-1 border border-zinc-800">
+                 <button onClick={() => formatDoc('bold')} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition" title="Жирный"><Bold size={16} /></button>
+                 <button onClick={() => formatDoc('italic')} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition" title="Курсив"><Italic size={16} /></button>
+                 <button onClick={() => formatDoc('underline')} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition" title="Подчеркнутый"><Underline size={16} /></button>
+               </div>
+               <div className="w-px h-6 bg-zinc-800 mx-2"></div>
+               <div className="flex bg-zinc-900/50 rounded-lg p-1 border border-zinc-800">
+                 <button onClick={() => formatDoc('formatBlock', 'H2')} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white font-bold transition" title="Заголовок"><Type size={16} /></button>
+                 <button onClick={() => formatDoc('insertUnorderedList')} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition" title="Список"><List size={16} /></button>
+                 <button onClick={() => formatDoc('formatBlock', 'blockquote')} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition" title="Цитата"><Quote size={16} /></button>
+                 <button onClick={() => openImageModal('content')} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-400 hover:text-white transition" title="Вставить изображение"><ImageIcon size={16} /></button>
+               </div>
               </div>
               <div className="flex items-center space-x-3">
-               <span className="text-xs text-gray-500 italic mr-2 hidden md:inline">{saveStatus}</span>
+               <span className="text-xs text-zinc-500 italic mr-2 hidden md:inline font-mono">{saveStatus}</span>
                <button 
                 onClick={handleDelete} 
-                className={`flex items-center gap-2 p-2 rounded transition-colors ${showDeleteConfirm ? 'bg-red-600 text-white hover:bg-red-700' : 'text-red-500 hover:bg-red-900/20'}`}
+                className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${showDeleteConfirm ? 'bg-red-600 text-white hover:bg-red-700' : 'text-red-500 hover:bg-red-900/20'}`}
                 title="Удалить"
                >
                  {showDeleteConfirm ? <span className="text-xs font-bold px-1">ПОДТВЕРДИТЬ?</span> : <Trash2 size={18} />}
                </button>
-               <button onClick={() => handleSave(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm font-bold flex items-center gap-1 shadow-lg shadow-blue-900/20">
+               <button onClick={() => handleSave(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition hover:scale-105">
                  <Save size={16} /> <span className="hidden md:inline">Сохранить</span>
                </button>
               </div>
           </div>
         ) : (
-          <div className="h-12 border-b border-gray-800 bg-[#0f172a]/50 flex items-center justify-between px-4 shrink-0">
+          <div className="h-14 border-b border-zinc-800 bg-[#0a0a0a]/80 backdrop-blur flex items-center justify-between px-6 shrink-0 z-20">
              {view === 'news' && (
-               <button onClick={() => setActiveNewsId(null)} className="text-gray-400 hover:text-white flex items-center gap-2 text-sm font-bold">
+               <button onClick={() => setActiveNewsId(null)} className="text-zinc-400 hover:text-white flex items-center gap-2 text-sm font-bold transition">
                  <ArrowLeft size={16} /> Назад к новостям
                </button>
              )}
-             <span className="text-xs text-gray-500 uppercase tracking-widest flex items-center gap-2 ml-auto"><Eye size={14} /> Режим чтения</span>
+             <span className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2 ml-auto"><Eye size={14} /> Режим чтения</span>
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 relative">
-           <div className="max-w-4xl mx-auto">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 relative custom-scrollbar bg-[#050505]">
+           <div className="max-w-5xl mx-auto bg-[#0a0a0a] border border-zinc-800 p-8 md:p-12 rounded-2xl shadow-2xl relative min-h-[80vh]">
+             {/* Decorative Background Icon */}
+             <div className="absolute top-10 right-10 opacity-[0.03] pointer-events-none select-none">
+                <CloudOff size={300} />
+             </div>
              
              {view === 'wiki' && (
                 <datalist id="category-list">
@@ -996,32 +1021,35 @@ export default function App() {
                 </datalist>
              )}
 
-             <div className="flex flex-col gap-4 mb-2">
+             <div className="flex flex-col gap-4 mb-6 relative z-10">
                <div className="flex gap-4 items-center">
-                 <input 
-                   type="text" 
-                   value={editorCategory}
-                   onChange={(e) => setEditorCategory(e.target.value)}
-                   readOnly={!isAdmin}
-                   placeholder={view === 'wiki' ? "КАТЕГОРИЯ" : "ДАТА (ДД.ММ.ГГГГ)"}
-                   list={view === 'wiki' ? "category-list" : undefined}
-                   className={`bg-transparent border-none text-red-500 font-mono text-sm uppercase tracking-widest focus:ring-0 focus:outline-none placeholder-red-900/50 ${!isAdmin && 'pointer-events-none'}`}
-                 />
+                 <div className="flex items-center gap-2 text-red-600 bg-red-900/10 px-3 py-1 rounded-full border border-red-900/30">
+                    <Hash size={12} />
+                    <input 
+                      type="text" 
+                      value={editorCategory}
+                      onChange={(e) => setEditorCategory(e.target.value)}
+                      readOnly={!isAdmin}
+                      placeholder={view === 'wiki' ? "КАТЕГОРИЯ" : "ДАТА"}
+                      list={view === 'wiki' ? "category-list" : undefined}
+                      className={`bg-transparent border-none text-red-500 font-mono text-xs uppercase tracking-widest focus:ring-0 focus:outline-none placeholder-red-900/50 w-auto min-w-[100px] ${!isAdmin && 'pointer-events-none'}`}
+                    />
+                 </div>
                  
                  {/* Поле для обложки (только новости и только админ) */}
                  {view === 'news' && isAdmin && (
-                    <div className="flex-1 flex items-center gap-2 bg-[#0f172a] rounded px-2 py-1 border border-gray-800 focus-within:border-gray-600 transition">
-                      <Layout size={14} className="text-gray-500" />
+                    <div className="flex-1 flex items-center gap-2 bg-zinc-900/50 rounded-lg px-3 py-1.5 border border-zinc-800 focus-within:border-zinc-600 transition">
+                      <Layout size={14} className="text-zinc-500" />
                       <input 
                         type="text"
                         value={editorImage}
                         onChange={(e) => setEditorImage(e.target.value)}
                         placeholder="Ссылка на обложку..."
-                        className="bg-transparent border-none text-gray-300 text-xs w-full focus:outline-none placeholder-gray-600"
+                        className="bg-transparent border-none text-zinc-300 text-xs w-full focus:outline-none placeholder-zinc-600"
                       />
                       <button 
                         onClick={() => openImageModal('cover')} 
-                        className="text-blue-500 hover:text-white transition"
+                        className="text-blue-500 hover:text-blue-400 transition"
                         title="Загрузить/Выбрать"
                       >
                         <UploadCloud size={14} />
@@ -1036,14 +1064,14 @@ export default function App() {
                value={editorTitle}
                onChange={(e) => setEditorTitle(e.target.value)}
                readOnly={!isAdmin}
-               placeholder="Заголовок"
-               className={`w-full bg-transparent border-none text-3xl md:text-5xl font-extrabold text-white mb-6 focus:ring-0 focus:outline-none placeholder-gray-800 ${!isAdmin && 'pointer-events-none'}`}
+               placeholder="Заголовок Статьи"
+               className={`w-full bg-transparent border-none text-4xl md:text-5xl font-extrabold text-white mb-8 focus:ring-0 focus:outline-none placeholder-zinc-800 leading-tight relative z-10 ${!isAdmin && 'pointer-events-none'}`}
              />
 
              {view === 'news' && editorImage && (
-                <div className="mb-8 w-full h-64 md:h-80 rounded-lg overflow-hidden relative shadow-2xl border border-gray-800">
-                  <img src={editorImage} alt="Cover" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/20"></div>
+                <div className="mb-10 w-full h-64 md:h-96 rounded-xl overflow-hidden relative shadow-2xl border border-zinc-800 group">
+                  <img src={editorImage} alt="Cover" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-60"></div>
                 </div>
              )}
              
@@ -1051,7 +1079,7 @@ export default function App() {
                ref={editorContentRef}
                contentEditable={isAdmin}
                onInput={() => isAdmin && setSaveStatus('Редактирование...')}
-               className="wiki-content min-h-[50vh] text-gray-300 outline-none pb-24 prose prose-invert max-w-none"
+               className="wiki-content text-zinc-300 outline-none pb-24 prose prose-invert prose-lg max-w-none relative z-10"
                style={{ fontFamily: 'Exo 2, sans-serif' }}
              />
            </div>
@@ -1066,15 +1094,26 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
         .font-exo { font-family: 'Exo 2', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .wiki-content h2 { font-size: 1.5em; font-weight: 700; margin-top: 1em; margin-bottom: 0.5em; color: #f87171; }
-        .wiki-content ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
-        .wiki-content blockquote { border-left: 4px solid #dc2626; padding-left: 1em; margin: 1em 0; color: #94a3b8; font-style: italic; background: rgba(220, 38, 38, 0.1); padding: 10px; border-radius: 0 4px 4px 0; }
-        .wiki-content code { background: #1e293b; padding: 2px 5px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; color: #fca5a5; }
-        .wiki-content img { max-width: 100%; height: auto; border-radius: 8px; margin: 1em 0; border: 1px solid #333; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #dc2626; }
+        
+        /* Wiki Content Styles */
+        .wiki-content h2 { font-size: 1.8em; font-weight: 800; margin-top: 1.5em; margin-bottom: 0.8em; color: #fff; border-bottom: 2px solid #3f3f46; padding-bottom: 0.3em; letter-spacing: -0.02em; }
+        .wiki-content h3 { font-size: 1.4em; font-weight: 700; margin-top: 1.2em; margin-bottom: 0.6em; color: #e4e4e7; }
+        .wiki-content p { line-height: 1.8; margin-bottom: 1.2em; color: #d4d4d8; }
+        .wiki-content ul { list-style-type: none; padding-left: 1em; margin-bottom: 1.5em; }
+        .wiki-content ul li { position: relative; padding-left: 1.5em; margin-bottom: 0.5em; }
+        .wiki-content ul li::before { content: "•"; color: #dc2626; font-weight: bold; position: absolute; left: 0; font-size: 1.2em; }
+        .wiki-content blockquote { border-left: 4px solid #dc2626; padding: 1em 1.5em; margin: 1.5em 0; color: #a1a1aa; font-style: italic; background: rgba(220, 38, 38, 0.05); border-radius: 0 8px 8px 0; }
+        .wiki-content code { background: #18181b; padding: 0.2em 0.4em; border-radius: 4px; font-family: 'JetBrains Mono', monospace; color: #fca5a5; font-size: 0.9em; border: 1px solid #27272a; }
+        .wiki-content img { max-width: 100%; height: auto; border-radius: 12px; margin: 2em 0; border: 1px solid #27272a; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); }
+        .wiki-content strong { color: #fff; font-weight: 700; }
+        .wiki-content a { color: #ef4444; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+        .wiki-content a:hover { border-bottom-color: #ef4444; }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
       `}</style>
       
       <ParticlesBackground />
