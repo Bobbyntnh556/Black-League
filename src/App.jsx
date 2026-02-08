@@ -3,7 +3,7 @@ import {
   Menu, X, Lock, Unlock, Play, Book, Save, Trash2, PlusCircle, FolderPlus,
   Bold, Italic, Underline, List, Quote, Type, Eye, CheckCircle, ExternalLink, AlertTriangle,
   Image as ImageIcon, UploadCloud, Newspaper, Calendar, ArrowLeft, CloudOff, Cloud, Layout,
-  ChevronRight, Hash, Terminal, Cpu, ShieldAlert, GripVertical
+  ChevronRight, Hash, Terminal, Cpu, ShieldAlert, GripVertical, Wifi, WifiOff, Activity
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -348,11 +348,45 @@ export default function App() {
   const [draggedPageId, setDraggedPageId] = useState(null);
   const [dragOverCategory, setDragOverCategory] = useState(null);
 
+  // SERVER STATUS STATE
+  const [serverStatus, setServerStatus] = useState({ online: false, players: 0, max: 0, loading: true });
+
   const editorContentRef = useRef(null);
   const selectionRangeRef = useRef(null);
   const [toast, setToast] = useState({ message: '', visible: false });
   const [authUser, setAuthUser] = useState(null);
   const [dataSource, setDataSource] = useState(IS_FIREBASE_INITIALIZED ? 'firebase' : 'local');
+
+  // --- 0. SERVER CHECKER EFFECT ---
+  useEffect(() => {
+    const checkServerStatus = async () => {
+      setServerStatus(prev => ({ ...prev, loading: true }));
+      try {
+        // Использование api.mcsrvstat.us для проверки статуса (работает с CORS)
+        const response = await fetch('https://api.mcsrvstat.us/2/play.blackleague.net');
+        const data = await response.json();
+        
+        if (data.online) {
+          setServerStatus({
+            online: true,
+            players: data.players.online,
+            max: data.players.max,
+            loading: false
+          });
+        } else {
+          setServerStatus({ online: false, players: 0, max: 0, loading: false });
+        }
+      } catch (error) {
+        console.error("Server check failed", error);
+        setServerStatus({ online: false, players: 0, max: 0, loading: false });
+      }
+    };
+
+    checkServerStatus();
+    // Проверка каждую минуту
+    const interval = setInterval(checkServerStatus, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // --- 1. АВТОРИЗАЦИЯ И ЗАГРУЗКА ---
   useEffect(() => {
@@ -686,6 +720,22 @@ export default function App() {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
+            
+            {/* SERVER STATUS WIDGET */}
+            <div className="hidden lg:flex items-center gap-3 bg-black/50 border border-zinc-800 rounded-full pl-3 pr-4 py-1 mr-2" title="play.blackleague.net">
+               <div className={`w-2.5 h-2.5 rounded-full ${serverStatus.loading ? 'bg-yellow-500 animate-pulse' : (serverStatus.online ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]')}`}></div>
+               <div className="flex flex-col leading-none">
+                 <span className={`text-[9px] font-bold tracking-widest uppercase ${serverStatus.online ? 'text-green-500' : 'text-zinc-500'}`}>
+                    {serverStatus.loading ? 'CHECKING...' : (serverStatus.online ? 'ONLINE' : 'OFFLINE')}
+                 </span>
+                 {serverStatus.online && (
+                   <span className="text-[10px] font-mono text-zinc-300 font-bold">
+                     {serverStatus.players} / {serverStatus.max}
+                   </span>
+                 )}
+               </div>
+            </div>
+
             {isAdmin && (
               <button onClick={handleLogout} className="text-zinc-600 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-500/10" title="Выйти">
                 <Unlock size={18} />
@@ -711,6 +761,14 @@ export default function App() {
       {isMobileMenuOpen && (
         <div className="md:hidden bg-black/95 backdrop-blur-xl border-b border-zinc-800 animate-slideDown">
           <div className="px-4 pt-4 pb-6 space-y-2 text-center">
+            {/* Mobile Server Status */}
+             <div className="flex items-center justify-center gap-3 bg-zinc-900/50 rounded-lg py-2 mb-4 border border-zinc-800">
+               <div className={`w-2 h-2 rounded-full ${serverStatus.loading ? 'bg-yellow-500 animate-pulse' : (serverStatus.online ? 'bg-green-500' : 'bg-red-500')}`}></div>
+               <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest">
+                  {serverStatus.loading ? 'CHECKING...' : (serverStatus.online ? `${serverStatus.players}/${serverStatus.max} ONLINE` : 'SERVER OFFLINE')}
+               </span>
+             </div>
+
             <button onClick={() => { setView('landing'); setIsMobileMenuOpen(false); }} className="text-zinc-300 block w-full px-3 py-3 rounded-lg text-lg font-bold border border-zinc-800 bg-zinc-900/50">ГЛАВНАЯ</button>
             <button onClick={() => { setView('news'); setActiveNewsId(null); setIsMobileMenuOpen(false); }} className="text-zinc-300 block w-full px-3 py-3 rounded-lg text-lg font-bold border border-zinc-800 bg-zinc-900/50">НОВОСТИ</button>
             <button onClick={() => { setView('wiki'); setIsMobileMenuOpen(false); }} className="text-zinc-300 block w-full px-3 py-3 rounded-lg text-lg font-bold border border-zinc-800 bg-zinc-900/50">БАЗА ЗНАНИЙ</button>
@@ -752,7 +810,10 @@ export default function App() {
             <button onClick={copyIP} className="group relative w-full md:w-auto overflow-hidden rounded-xl bg-white text-black px-8 py-4 font-bold uppercase tracking-widest transition-all hover:bg-zinc-200 hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.2)]">
               <div className="relative z-10 flex items-center justify-center gap-3">
                 <Play size={20} fill="currentColor" />
-                <span>play.blackleague.net</span>
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-xs font-normal opacity-60">IP ADRESS:</span>
+                  <span>play.blackleague.net</span>
+                </div>
               </div>
             </button>
             <button onClick={() => setView('wiki')} className="w-full md:w-auto px-8 py-4 rounded-xl border border-white/20 bg-white/5 backdrop-blur-md text-white font-bold uppercase tracking-widest hover:bg-white/10 hover:border-white/40 transition-all flex items-center justify-center gap-3">
@@ -779,7 +840,7 @@ export default function App() {
                 <div className="h-1 w-24 bg-red-600 mt-4 shadow-[0_0_15px_red]"></div>
              </div>
              <button onClick={() => setView('news')} className="hidden md:flex items-center gap-2 text-zinc-500 hover:text-white transition uppercase text-xs font-bold tracking-widest">
-                Все записи <ArrowLeft className="rotate-180" size={14} />
+               Все записи <ArrowLeft className="rotate-180" size={14} />
              </button>
           </div>
 
