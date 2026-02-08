@@ -1004,7 +1004,7 @@ export default function App() {
                  <ArrowLeft size={16} /> Назад к новостям
                </button>
              )}
-             <span className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2 ml-auto"><Eye size={14} /> Режим чтения</span>
+             <span className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2 ml-auto"><Eye size={14} /></span>
           </div>
         )}
 
