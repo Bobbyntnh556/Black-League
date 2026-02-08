@@ -25,7 +25,18 @@ import {
   query 
 } from 'firebase/firestore';
 
-// --- ИНИЦИАЛИЗАЦИЯ FIREBASE (БЕЗОПАСНАЯ & VERCEL-READY) ---
+// --- БЕЗОПАСНЫЕ УТИЛИТЫ ---
+
+const safeJSONParse = (str, fallback) => {
+  try {
+    return str ? JSON.parse(str) : fallback;
+  } catch (e) {
+    console.warn("JSON Parse Error (clearing storage):", e);
+    return fallback;
+  }
+};
+
+// --- ИНИЦИАЛИЗАЦИЯ FIREBASE ---
 
 const localConfig = {
   apiKey: "AIzaSyAW4YLD3JDmuPkUACrIW5HaU93l_U_cmno",
@@ -41,28 +52,27 @@ let app, auth, db;
 let IS_FIREBASE_INITIALIZED = false;
 
 const getFirebaseConfig = () => {
-  if (typeof __firebase_config !== 'undefined') return JSON.parse(__firebase_config);
-  try { if (import.meta.env && import.meta.env.VITE_FIREBASE_CONFIG) return JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG); } catch (e) {}
-  try { if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_FIREBASE_CONFIG) return JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG); } catch (e) {}
+  if (typeof __firebase_config !== 'undefined') return safeJSONParse(__firebase_config, localConfig);
+  try { if (import.meta.env && import.meta.env.VITE_FIREBASE_CONFIG) return safeJSONParse(import.meta.env.VITE_FIREBASE_CONFIG, localConfig); } catch (e) {}
+  try { if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_FIREBASE_CONFIG) return safeJSONParse(process.env.REACT_APP_FIREBASE_CONFIG, localConfig); } catch (e) {}
   return localConfig;
 };
 
-// FIX: Санитизация appId для предотвращения ошибок путей Firestore
+// Санитизация appId
 const getAppId = () => {
   let id = 'default-app-id';
   if (typeof __app_id !== 'undefined') id = __app_id;
   else {
     try { if (import.meta.env && import.meta.env.VITE_APP_ID) id = import.meta.env.VITE_APP_ID; } catch(e) {}
   }
-  // Заменяем недопустимые символы
-  return id.replace(/[./]/g, '_');
+  return String(id).replace(/[./]/g, '_');
 };
 
 try {
   const config = getFirebaseConfig();
-  const isLocalConfigValid = config.apiKey && !config.apiKey.includes("INSERT_YOUR_OWN");
+  const isLocalConfigValid = config && config.apiKey && !config.apiKey.includes("INSERT_YOUR_OWN");
 
-  if (config && isLocalConfigValid) {
+  if (isLocalConfigValid) {
     app = initializeApp(config);
     auth = getAuth(app);
     db = getFirestore(app);
@@ -107,13 +117,19 @@ const ParticlesBackground = () => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     let animationFrameId;
     let particlesArray = [];
 
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      if (canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
     };
     
     window.addEventListener('resize', resize);
@@ -123,7 +139,7 @@ const ParticlesBackground = () => {
       constructor() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 2;
+        this.size = Math.random() * 2 + 0.5; // Ensure non-zero size
         this.speedX = (Math.random() * 0.5) - 0.25;
         this.speedY = (Math.random() * 0.5) - 0.25;
         this.opacity = Math.random() * 0.5;
@@ -390,7 +406,6 @@ export default function App() {
           }
         } catch (e) {
           console.error("Auth error:", e);
-          // If auth fails, fallback to local
           setDataSource('local');
         }
       };
@@ -440,20 +455,21 @@ export default function App() {
     } 
     
     // 2b. Local Storage Sync (Fallback or Default)
+    // FIX: Используем safeJSONParse для защиты от битых данных
     if (dataSource === 'local') {
       const storedWiki = localStorage.getItem('bl_wiki_data');
       const storedNews = localStorage.getItem('bl_news_data');
       
-      const loadedWiki = storedWiki ? JSON.parse(storedWiki) : DEFAULT_WIKI_DATA;
+      const loadedWiki = safeJSONParse(storedWiki, DEFAULT_WIKI_DATA);
       setWikiPages(loadedWiki);
-      setNewsItems(storedNews ? JSON.parse(storedNews) : DEFAULT_NEWS_DATA);
+      setNewsItems(safeJSONParse(storedNews, DEFAULT_NEWS_DATA));
       
       // Select first wiki page if none selected and pages exist
       if (loadedWiki.length > 0 && !activePageId) setActivePageId(loadedWiki[0].id);
       
       showToast("Режим: Локальное хранилище");
     }
-  }, [authUser, dataSource]); // Removed activePageId dependency loop
+  }, [authUser, dataSource]);
 
   // --- 3. РЕДАКТОР: СИНХРОНИЗАЦИЯ ПОЛЕЙ ---
   useEffect(() => {
@@ -527,8 +543,7 @@ export default function App() {
       } catch(e) { 
         console.error(e); 
         showToast("Ошибка Cloud. Переход на Local.");
-        setDataSource('local'); // Fallback
-        // Retry locally immediately? For now just switch mode.
+        setDataSource('local');
       }
     } else {
       const newPage = { id: Date.now().toString(), ...newPageData };
@@ -1004,16 +1019,12 @@ export default function App() {
                  <ArrowLeft size={16} /> Назад к новостям
                </button>
              )}
-             <span className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2 ml-auto"><Eye size={14} /></span>
+             <span className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-2 ml-auto"><Eye size={14} /> Режим чтения</span>
           </div>
         )}
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 relative custom-scrollbar bg-[#050505]">
            <div className="max-w-5xl mx-auto bg-[#0a0a0a] border border-zinc-800 p-8 md:p-12 rounded-2xl shadow-2xl relative min-h-[80vh]">
-             {/* Decorative Background Icon */}
-             <div className="absolute top-10 right-10 opacity-[0.03] pointer-events-none select-none">
-                <CloudOff size={300} />
-             </div>
              
              {view === 'wiki' && (
                 <datalist id="category-list">
@@ -1087,48 +1098,6 @@ export default function App() {
            </div>
         </div>
       </main>
-    </div>
-  );
-
-  return (
-    <div className="font-exo bg-[#050505] text-slate-200 min-h-screen relative">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-        .font-exo { font-family: 'Exo 2', sans-serif; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        
-        /* Wiki Content Styles */
-        .wiki-content h2 { font-size: 1.8em; font-weight: 800; margin-top: 1.5em; margin-bottom: 0.8em; color: #fff; border-bottom: 2px solid #3f3f46; padding-bottom: 0.3em; letter-spacing: -0.02em; }
-        .wiki-content h3 { font-size: 1.4em; font-weight: 700; margin-top: 1.2em; margin-bottom: 0.6em; color: #e4e4e7; }
-        .wiki-content p { line-height: 1.8; margin-bottom: 1.2em; color: #d4d4d8; }
-        .wiki-content ul { list-style-type: none; padding-left: 1em; margin-bottom: 1.5em; }
-        .wiki-content ul li { position: relative; padding-left: 1.5em; margin-bottom: 0.5em; }
-        .wiki-content ul li::before { content: "•"; color: #dc2626; font-weight: bold; position: absolute; left: 0; font-size: 1.2em; }
-        .wiki-content blockquote { border-left: 4px solid #dc2626; padding: 1em 1.5em; margin: 1.5em 0; color: #a1a1aa; font-style: italic; background: rgba(220, 38, 38, 0.05); border-radius: 0 8px 8px 0; }
-        .wiki-content code { background: #18181b; padding: 0.2em 0.4em; border-radius: 4px; font-family: 'JetBrains Mono', monospace; color: #fca5a5; font-size: 0.9em; border: 1px solid #27272a; }
-        .wiki-content img { max-width: 100%; height: auto; border-radius: 12px; margin: 2em 0; border: 1px solid #27272a; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); }
-        .wiki-content strong { color: #fff; font-weight: 700; }
-        .wiki-content a { color: #ef4444; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
-        .wiki-content a:hover { border-bottom-color: #ef4444; }
-
-        /* Custom Scrollbar */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
-      `}</style>
-      
-      <ParticlesBackground />
-      <Toast message={toast.message} visible={toast.visible} />
-      <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLogin={handleLogin} error={loginError} />
-      <CategoryModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} onCreate={handleCreateCategory} />
-      <ImageModal isOpen={isImageModalOpen} onClose={() => setIsImageModalOpen(false)} onInsert={handleInsertImage} targetType={imageModalTarget} />
-
-      {renderNavbar()}
-      {view === 'landing' && renderLanding()}
-      {view === 'wiki' && renderEditor()}
-      {view === 'news' && !activeNewsId && renderNewsList()}
-      {view === 'news' && activeNewsId && renderEditor()}
     </div>
   );
 }
