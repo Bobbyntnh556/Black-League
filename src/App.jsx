@@ -781,9 +781,9 @@ export default function App() {
           </div>
           <p className="text-zinc-600 text-xs font-mono mb-8">&copy; 2026 Black League Project. All rights reserved.</p>
           <div className="flex justify-center gap-6">
-            <a href="#" className="text-zinc-600 hover:text-white transition">Правила</a>
+            <a href="#" className="text-zinc-600 hover:text-white transition"></a>
             <a href="#" className="text-zinc-600 hover:text-white transition">Вики</a>
-            <a href="#" className="text-zinc-600 hover:text-white transition">Донат</a>
+            <a href="#" className="text-zinc-600 hover:text-white transition"></a>
           </div>
           {/* Secret Admin Area */}
           <div className="w-8 h-8 mx-auto mt-20 opacity-0 cursor-default" onClick={() => !isAdmin && setIsLoginModalOpen(true)}></div>
