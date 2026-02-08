@@ -803,7 +803,7 @@ export default function App() {
           </h1>
           
           <p className="text-lg md:text-2xl text-zinc-400 mb-12 max-w-3xl mx-auto font-light leading-relaxed">
-            Хардкорный сервер выживания. Исследуй мир, где каждый шаг может стать последним. Мрачная атмосфера постапокалипсиса и бескомпромиссная борьба за жизнь.
+            Black League - Это приватный майнкрафт сервер с элементами RP и необыкновенными механиками..
           </p>
           
           <div className="flex flex-col md:flex-row gap-6 justify-center items-center">
