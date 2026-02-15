@@ -324,7 +324,11 @@ const LoginModal = ({ isOpen, onClose, onLogin, error }) => {
 
 // --- ОСНОВНОЙ КОМПОНЕНТ APP ---
 export default function App() {
+  // --- STATE ---
   const [view, setView] = useState('landing');
+  const [activePageId, setActivePageId] = useState(null);
+  const [activeNewsId, setActiveNewsId] = useState(null);
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -334,9 +338,7 @@ export default function App() {
   const [loginError, setLoginError] = useState(false);
   
   const [wikiPages, setWikiPages] = useState([]);
-  const [activePageId, setActivePageId] = useState(null);
   const [newsItems, setNewsItems] = useState([]);
-  const [activeNewsId, setActiveNewsId] = useState(null);
 
   const [editorTitle, setEditorTitle] = useState('');
   const [editorCategory, setEditorCategory] = useState('');
@@ -446,7 +448,10 @@ export default function App() {
       const loadedWiki = storedWiki ? JSON.parse(storedWiki) : DEFAULT_WIKI_DATA;
       setWikiPages(loadedWiki);
       setNewsItems(storedNews ? JSON.parse(storedNews) : DEFAULT_NEWS_DATA);
-      if (loadedWiki.length > 0 && !activePageId) setActivePageId(loadedWiki[0].id);
+      
+      // Auto-select first page only if no page is selected via URL and we are in wiki view
+      if (loadedWiki.length > 0 && !activePageId && view === 'wiki') setActivePageId(loadedWiki[0].id);
+      
       showToast("Режим: LOCAL STORAGE");
     }
   }, [authUser, dataSource]);
@@ -726,7 +731,7 @@ export default function App() {
                <div className={`w-2.5 h-2.5 rounded-full ${serverStatus.loading ? 'bg-yellow-500 animate-pulse' : (serverStatus.online ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]')}`}></div>
                <div className="flex flex-col leading-none">
                  <span className={`text-[9px] font-bold tracking-widest uppercase ${serverStatus.online ? 'text-green-500' : 'text-zinc-500'}`}>
-                    {serverStatus.loading ? 'CHECKING...' : (serverStatus.online ? 'ONLINE' : 'OFFLINE')}
+                   {serverStatus.loading ? 'CHECKING...' : (serverStatus.online ? 'ONLINE' : 'OFFLINE')}
                  </span>
                  {serverStatus.online && (
                    <span className="text-[10px] font-mono text-zinc-300 font-bold">
@@ -765,7 +770,7 @@ export default function App() {
              <div className="flex items-center justify-center gap-3 bg-zinc-900/50 rounded-lg py-2 mb-4 border border-zinc-800">
                <div className={`w-2 h-2 rounded-full ${serverStatus.loading ? 'bg-yellow-500 animate-pulse' : (serverStatus.online ? 'bg-green-500' : 'bg-red-500')}`}></div>
                <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest">
-                  {serverStatus.loading ? 'CHECKING...' : (serverStatus.online ? `${serverStatus.players}/${serverStatus.max} ONLINE` : 'SERVER OFFLINE')}
+                 {serverStatus.loading ? 'CHECKING...' : (serverStatus.online ? `${serverStatus.players}/${serverStatus.max} ONLINE` : 'SERVER OFFLINE')}
                </span>
              </div>
 
@@ -1085,61 +1090,61 @@ export default function App() {
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#050505] p-0 md:p-8">
            <div className="max-w-4xl mx-auto min-h-[90vh] bg-[#080808] border-x border-zinc-900 shadow-2xl relative p-8 md:p-16">
-              
-              {/* Header Info */}
-              <div className="mb-12 border-b border-zinc-800 pb-8">
-                  <div className="flex flex-col gap-4 mb-6">
-                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 text-xs font-mono text-red-500 uppercase tracking-widest border border-red-900/30 bg-red-950/10 px-3 py-1 rounded-full">
-                           <Hash size={10} />
-                           {isAdmin ? (
-                             <input 
-                               type="text" 
-                               value={editorCategory}
-                               onChange={(e) => setEditorCategory(e.target.value)}
-                               placeholder="CATEGORY"
-                               list={view === 'wiki' ? "category-list" : undefined}
-                               className="bg-transparent border-none text-red-500 focus:ring-0 p-0 w-auto min-w-[50px] placeholder-red-900/50 uppercase"
-                             />
-                           ) : (
-                             <span>{editorCategory || 'GENERAL'}</span>
-                           )}
-                        </div>
-                        {/* Cover Image Input (News Only) */}
-                        {view === 'news' && isAdmin && (
-                           <div className="flex-1 flex items-center gap-2 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 focus-within:border-zinc-600">
-                              <Layout size={12} className="text-zinc-600" />
-                              <input type="text" value={editorImage} onChange={(e) => setEditorImage(e.target.value)} placeholder="URL обложки..." className="bg-transparent text-xs text-zinc-400 w-full focus:outline-none" />
-                              <button onClick={() => openImageModal('cover')} className="text-blue-500 hover:text-white"><UploadCloud size={12} /></button>
-                           </div>
-                        )}
-                     </div>
-                     
-                     <input 
-                       type="text" 
-                       value={editorTitle}
-                       onChange={(e) => setEditorTitle(e.target.value)}
-                       readOnly={!isAdmin}
-                       placeholder="ЗАГОЛОВОК"
-                       className={`w-full bg-transparent border-none text-4xl md:text-6xl font-black text-white focus:ring-0 focus:outline-none placeholder-zinc-800 leading-none uppercase tracking-tight ${!isAdmin && 'pointer-events-none'}`}
-                     />
-                  </div>
-                  
-                  {view === 'news' && editorImage && (
-                     <div className="w-full h-64 md:h-80 rounded-lg overflow-hidden relative mb-8 border border-zinc-800">
-                        <img src={editorImage} alt="Cover" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#080808] to-transparent"></div>
-                     </div>
-                  )}
-              </div>
+             
+             {/* Header Info */}
+             <div className="mb-12 border-b border-zinc-800 pb-8">
+                 <div className="flex flex-col gap-4 mb-6">
+                    <div className="flex items-center gap-4">
+                       <div className="flex items-center gap-2 text-xs font-mono text-red-500 uppercase tracking-widest border border-red-900/30 bg-red-950/10 px-3 py-1 rounded-full">
+                          <Hash size={10} />
+                          {isAdmin ? (
+                            <input 
+                              type="text" 
+                              value={editorCategory}
+                              onChange={(e) => setEditorCategory(e.target.value)}
+                              placeholder="CATEGORY"
+                              list={view === 'wiki' ? "category-list" : undefined}
+                              className="bg-transparent border-none text-red-500 focus:ring-0 p-0 w-auto min-w-[50px] placeholder-red-900/50 uppercase"
+                            />
+                          ) : (
+                            <span>{editorCategory || 'GENERAL'}</span>
+                          )}
+                       </div>
+                       {/* Cover Image Input (News Only) */}
+                       {view === 'news' && isAdmin && (
+                          <div className="flex-1 flex items-center gap-2 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 focus-within:border-zinc-600">
+                             <Layout size={12} className="text-zinc-600" />
+                             <input type="text" value={editorImage} onChange={(e) => setEditorImage(e.target.value)} placeholder="URL обложки..." className="bg-transparent text-xs text-zinc-400 w-full focus:outline-none" />
+                             <button onClick={() => openImageModal('cover')} className="text-blue-500 hover:text-white"><UploadCloud size={12} /></button>
+                          </div>
+                       )}
+                    </div>
+                    
+                    <input 
+                      type="text" 
+                      value={editorTitle}
+                      onChange={(e) => setEditorTitle(e.target.value)}
+                      readOnly={!isAdmin}
+                      placeholder="ЗАГОЛОВОК"
+                      className={`w-full bg-transparent border-none text-4xl md:text-6xl font-black text-white focus:ring-0 focus:outline-none placeholder-zinc-800 leading-none uppercase tracking-tight ${!isAdmin && 'pointer-events-none'}`}
+                    />
+                 </div>
+                 
+                 {view === 'news' && editorImage && (
+                    <div className="w-full h-64 md:h-80 rounded-lg overflow-hidden relative mb-8 border border-zinc-800">
+                       <img src={editorImage} alt="Cover" className="w-full h-full object-cover" />
+                       <div className="absolute inset-0 bg-gradient-to-t from-[#080808] to-transparent"></div>
+                    </div>
+                 )}
+             </div>
 
-              <div 
-                ref={editorContentRef}
-                contentEditable={isAdmin}
-                onInput={() => isAdmin && setSaveStatus('TYPING...')}
-                className="wiki-content prose prose-invert prose-lg max-w-none text-zinc-300 focus:outline-none pb-32"
-                style={{ fontFamily: 'Exo 2, sans-serif' }}
-              />
+             <div 
+               ref={editorContentRef}
+               contentEditable={isAdmin}
+               onInput={() => isAdmin && setSaveStatus('TYPING...')}
+               className="wiki-content prose prose-invert prose-lg max-w-none text-zinc-300 focus:outline-none pb-32"
+               style={{ fontFamily: 'Exo 2, sans-serif' }}
+             />
            </div>
            
            {/* Datalist for Categories */}
