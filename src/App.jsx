@@ -325,9 +325,18 @@ const LoginModal = ({ isOpen, onClose, onLogin, error }) => {
 // --- ОСНОВНОЙ КОМПОНЕНТ APP ---
 export default function App() {
   // --- STATE ---
-  const [view, setView] = useState('landing');
-  const [activePageId, setActivePageId] = useState(null);
-  const [activeNewsId, setActiveNewsId] = useState(null);
+  
+  // Helper to read URL params safely
+  const getUrlParam = (key, defaultVal = null) => {
+    if (typeof window === 'undefined') return defaultVal;
+    const params = new URLSearchParams(window.location.search);
+    return params.get(key) || defaultVal;
+  };
+
+  // INITIALIZE STATE FROM URL PARAMS
+  const [view, setView] = useState(() => getUrlParam('view', 'landing'));
+  const [activePageId, setActivePageId] = useState(() => getUrlParam('page'));
+  const [activeNewsId, setActiveNewsId] = useState(() => getUrlParam('id'));
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -359,7 +368,41 @@ export default function App() {
   const [authUser, setAuthUser] = useState(null);
   const [dataSource, setDataSource] = useState(IS_FIREBASE_INITIALIZED ? 'firebase' : 'local');
 
-  // --- 0. SERVER CHECKER EFFECT ---
+  // --- 0. URL SYNC & HISTORY MANAGEMENT ---
+  
+  // Effect 1: Listen for browser Back/Forward buttons (PopState)
+  useEffect(() => {
+    const handlePopState = () => {
+      const v = getUrlParam('view', 'landing');
+      setView(v);
+      setActivePageId(getUrlParam('page'));
+      setActiveNewsId(getUrlParam('id'));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Effect 2: Update URL when internal state changes (PushState)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    // Only set params if they deviate from default
+    if (view && view !== 'landing') params.set('view', view);
+    if (view === 'wiki' && activePageId) params.set('page', activePageId);
+    if (view === 'news' && activeNewsId) params.set('id', activeNewsId);
+
+    const newSearch = params.toString();
+    const currentSearch = window.location.search.replace(/^\?/, '');
+    
+    // Update URL only if it changed to avoid infinite loops
+    if (newSearch !== currentSearch) {
+      const newUrl = newSearch ? `?${newSearch}` : window.location.pathname;
+      window.history.pushState({}, '', newUrl);
+    }
+  }, [view, activePageId, activeNewsId]);
+
+  // --- 1. SERVER CHECKER EFFECT ---
   useEffect(() => {
     const checkServerStatus = async () => {
       setServerStatus(prev => ({ ...prev, loading: true }));
@@ -390,7 +433,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // --- 1. АВТОРИЗАЦИЯ И ЗАГРУЗКА ---
+  // --- 2. АВТОРИЗАЦИЯ И ЗАГРУЗКА ---
   useEffect(() => {
     const token = localStorage.getItem('bl_admin_token');
     if (token === 'true') setIsAdmin(true);
@@ -414,7 +457,7 @@ export default function App() {
     }
   }, [dataSource]);
 
-  // --- 2. СИНХРОНИЗАЦИЯ ДАННЫХ ---
+  // --- 3. СИНХРОНИЗАЦИЯ ДАННЫХ ---
   useEffect(() => {
     if (dataSource === 'firebase' && authUser) {
       const qWiki = query(collection(db, 'artifacts', appId, 'public', 'data', 'wiki'));
@@ -450,13 +493,14 @@ export default function App() {
       setNewsItems(storedNews ? JSON.parse(storedNews) : DEFAULT_NEWS_DATA);
       
       // Auto-select first page only if no page is selected via URL and we are in wiki view
+      // MODIFIED: Added check for !activePageId to respect URL param
       if (loadedWiki.length > 0 && !activePageId && view === 'wiki') setActivePageId(loadedWiki[0].id);
       
       showToast("Режим: LOCAL STORAGE");
     }
   }, [authUser, dataSource]);
 
-  // --- 3. РЕДАКТОР ---
+  // --- 4. РЕДАКТОР ---
   useEffect(() => {
     setShowDeleteConfirm(false);
     let targetItem = null;
